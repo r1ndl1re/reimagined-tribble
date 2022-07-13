@@ -7,11 +7,15 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing;
-use tracing_subscriber;
+use tracing::subscriber::set_global_default;
+use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
+use tracing_log::LogTracer;
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
 struct User {
-    id: u64,
+    id: String,
     username: String,
 }
 
@@ -25,16 +29,25 @@ async fn root() -> &'static str {
 }
 
 async fn create_user(Json(payload): Json<CreateUser>) -> impl IntoResponse {
+    let user_id = Uuid::new_v4();
     let user = User {
-        id: 1,
+        id: user_id.to_string(),
         username: payload.username,
     };
+    tracing::info!("new_user_created: {}", &user.username);
     (StatusCode::CREATED, Json(user))
 }
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    LogTracer::init().expect("Failed to set logger");
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let formatting_layer = BunyanFormattingLayer::new("sample".into(), std::io::stdout);
+    let subscriber = Registry::default()
+        .with(env_filter)
+        .with(JsonStorageLayer)
+        .with(formatting_layer);
+    set_global_default(subscriber).expect("Failed to set subscriber");
 
     let app = Router::new()
         .route("/", get(root))
