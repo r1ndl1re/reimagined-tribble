@@ -1,3 +1,5 @@
+mod telemetry;
+
 use axum::{
     http::StatusCode,
     response::IntoResponse,
@@ -6,11 +8,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use telemetry::{get_subscriber, init_subscriber};
 use tracing;
-use tracing::subscriber::set_global_default;
-use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
-use tracing_log::LogTracer;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -40,14 +39,8 @@ async fn create_user(Json(payload): Json<CreateUser>) -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() {
-    LogTracer::init().expect("Failed to set logger");
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let formatting_layer = BunyanFormattingLayer::new("sample".into(), std::io::stdout);
-    let subscriber = Registry::default()
-        .with(env_filter)
-        .with(JsonStorageLayer)
-        .with(formatting_layer);
-    set_global_default(subscriber).expect("Failed to set subscriber");
+    let subscriber = get_subscriber("sample", "info");
+    init_subscriber(subscriber);
 
     let app = Router::new()
         .route("/", get(root))
